@@ -738,7 +738,7 @@ Exceptions are defined by `vterm-keymap-exceptions'."
     (when vterm-env
       (make-local-variable 'vterm-environment)
       (setq vterm-environment (cdr vterm-env))))
-  (let ((process-environment (append vterm-environment
+  (let ((process-environment (append (with-connection-local-variables vterm-environment)
                                      `(,(concat "TERM="
                                                 vterm-term-environment-variable)
                                        ,(concat "EMACS_VTERM_PATH="
