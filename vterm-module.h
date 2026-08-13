@@ -120,6 +120,9 @@ typedef struct Term {
 
   char *cmd_buffer;
 
+  int osc_10_query_count;
+  int osc_11_query_count;
+
   int pty_fd;
 } Term;
 

@@ -1127,8 +1127,25 @@ static int handle_osc_cmd_51(Term *term, char subCmd, char *buffer) {
   return 0;
 }
 
+static int handle_osc_color_query(Term *term, int cmd, char *buffer) {
+  if (strcmp(buffer, "?") != 0) {
+    return 0;
+  }
+
+  if (cmd == 10) {
+    term->osc_10_query_count++;
+  } else if (cmd == 11) {
+    term->osc_11_query_count++;
+  } else {
+    return 0;
+  }
+  return 1;
+}
+
 static int handle_osc_cmd(Term *term, int cmd, char *buffer) {
-  if (cmd == 51) {
+  if (cmd == 10 || cmd == 11) {
+    return handle_osc_color_query(term, cmd, buffer);
+  } else if (cmd == 51) {
     char subCmd = '0';
     if (strlen(buffer) == 0) {
       return 0;
@@ -1148,7 +1165,12 @@ static int osc_callback(const char *command, size_t cmdlen, void *user) {
   buffer[cmdlen] = '\0';
   memcpy(buffer, command, cmdlen);
 
-  if (cmdlen > 4 && buffer[0] == '5' && buffer[1] == '1' && buffer[2] == ';' &&
+  if (cmdlen == 4 && buffer[0] == '1' &&
+      (buffer[1] == '0' || buffer[1] == '1') && buffer[2] == ';' &&
+      buffer[3] == '?') {
+    return handle_osc_color_query(term, buffer[1] == '0' ? 10 : 11,
+                                  &buffer[3]);
+  } else if (cmdlen > 4 && buffer[0] == '5' && buffer[1] == '1' && buffer[2] == ';' &&
       buffer[3] == 'A') {
     return handle_osc_cmd_51(term, 'A', &buffer[4]);
   } else if (cmdlen > 4 && buffer[0] == '5' && buffer[1] == '1' &&
@@ -1237,6 +1259,26 @@ static VTermSelectionCallbacks selection_callbacks = {
 
 #endif
 
+static void term_flush_osc_color_queries(Term *term, emacs_env *env) {
+  int osc_10_query_count = term->osc_10_query_count;
+  int osc_11_query_count = term->osc_11_query_count;
+  term->osc_10_query_count = 0;
+  term->osc_11_query_count = 0;
+
+  for (int cmd = 10; cmd <= 11; cmd++) {
+    int query_count = cmd == 10 ? osc_10_query_count : osc_11_query_count;
+    for (int i = 0; i < query_count; i++) {
+      emacs_value response = env->funcall(
+          env, Fvterm_osc_color_query_response, 1,
+          (emacs_value[]){env->make_integer(env, cmd)});
+      if (!env->is_not_nil(env, response)) {
+        continue;
+      }
+      env->funcall(env, Fvterm_flush_output, 1, (emacs_value[]){response});
+    }
+  }
+}
+
 emacs_value Fvterm_new(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
                        void *data) {
   Term *term = malloc(sizeof(Term));
@@ -1314,6 +1356,8 @@ emacs_value Fvterm_new(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
   term->selection_mask = 0;
 
   term->cmd_buffer = NULL;
+  term->osc_10_query_count = 0;
+  term->osc_11_query_count = 0;
 
   term->lines = malloc(sizeof(LineInfo *) * rows);
   term->lines_len = rows;
@@ -1347,6 +1391,7 @@ emacs_value Fvterm_update(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
 
   // Flush output
   term_flush_output(term, env);
+  term_flush_osc_color_queries(term, env);
   if (term->is_invalidated) {
     vterm_invalidate(env);
   }
@@ -1523,6 +1568,8 @@ int emacs_module_init(struct emacs_runtime *ert) {
   Feq = env->make_global_ref(env, env->intern(env, "eq"));
   Fvterm_get_color =
       env->make_global_ref(env, env->intern(env, "vterm--get-color"));
+  Fvterm_osc_color_query_response = env->make_global_ref(
+      env, env->intern(env, "vterm--osc-color-query-response"));
   Fvterm_eval = env->make_global_ref(env, env->intern(env, "vterm--eval"));
   Fvterm_set_selection =
       env->make_global_ref(env, env->intern(env, "vterm--set-selection"));

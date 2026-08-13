@@ -1766,6 +1766,16 @@ instead of background."
               (t 'default))
              nil 'default)))
 
+(defun vterm--osc-color-query-response (command)
+  "Return the OSC response for terminal color query COMMAND."
+  (let* ((color (if (= command 10)
+                    (vterm--get-color -1 :foreground)
+                  (vterm--get-color -1)))
+         (rgb (color-values color)))
+    (when rgb
+      (format "\e]%d;rgb:%04x/%04x/%04x\a" command
+              (nth 0 rgb) (nth 1 rgb) (nth 2 rgb)))))
+
 (defun vterm--eval (str)
   "Check if string STR is `vterm-eval-cmds' and execute command.
 

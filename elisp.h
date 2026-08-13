@@ -58,6 +58,7 @@ extern emacs_value Fvterm_set_directory;
 extern emacs_value Fvterm_invalidate;
 extern emacs_value Feq;
 extern emacs_value Fvterm_get_color;
+extern emacs_value Fvterm_osc_color_query_response;
 extern emacs_value Fvterm_eval;
 extern emacs_value Fvterm_set_selection;
 
